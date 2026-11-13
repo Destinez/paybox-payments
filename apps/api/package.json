@@ -1,0 +1,19 @@
+{
+  "name": "@paybox/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.7",
+    "@paybox/db": "workspace:*",
+    "@paybox/shared": "workspace:*",
+    "hono": "^4.13.18",
+    "zod": "^3.25.76"
+  }
+}
