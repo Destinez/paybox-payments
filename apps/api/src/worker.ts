@@ -16,7 +16,7 @@ const client =
   config.PAYSTACK_MODE === 'fake'
     ? new FakePaystackClient(db, config.API_PUBLIC_URL, config.PAYSTACK_WEBHOOK_SECRETS.split(',')[0]!)
     : new HttpPaystackClient(config.PAYSTACK_SECRET_KEY);
-const runner = new JobRunner(db, settlementHandlers(db, client), config.DEMO_MODE === 'true');
+const runner = new JobRunner(db, settlementHandlers(db, client, config), config.DEMO_MODE === 'true');
 try {
   while (!stopping) {
     const count = await runner.tick();

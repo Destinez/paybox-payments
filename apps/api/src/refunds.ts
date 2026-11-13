@@ -72,15 +72,13 @@ export class Refunds {
               requestedBy: actor,
             })
             .returning();
-          await tx
-            .insert(paymentEvents)
-            .values({
-              paymentId,
-              type: 'refund.requested',
-              source: 'api',
-              correlationId: payment.correlationId,
-              detail: { refund_id: refund!.id, amount, actor },
-            });
+          await tx.insert(paymentEvents).values({
+            paymentId,
+            type: 'refund.requested',
+            source: 'api',
+            correlationId: payment.correlationId,
+            detail: { refund_id: refund!.id, amount, actor },
+          });
           await enqueue(
             tx,
             'create_refund',
@@ -190,17 +188,15 @@ export class Refunds {
           payable(payment.merchantId, 'credit', refund.amount),
         ],
       });
-    await tx
-      .insert(paymentEvents)
-      .values({
-        paymentId: payment.id,
-        type: `refund.${next}`,
-        source: 'worker',
-        fromStatus: refund.status,
-        toStatus: next,
-        correlationId: payment.correlationId,
-        detail: { refund_id: refund.id, amount: refund.amount },
-      });
+    await tx.insert(paymentEvents).values({
+      paymentId: payment.id,
+      type: `refund.${next}`,
+      source: 'worker',
+      fromStatus: refund.status,
+      toStatus: next,
+      correlationId: payment.correlationId,
+      detail: { refund_id: refund.id, amount: refund.amount },
+    });
     if (next === 'processed' || next === 'failed')
       await enqueue(
         tx,

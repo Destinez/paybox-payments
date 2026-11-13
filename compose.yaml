@@ -44,6 +44,12 @@ services:
     environment: *service_env
     depends_on:
       migrate: { condition: service_completed_successfully }
+  merchant-receiver:
+    image: node:22-bookworm-slim
+    working_dir: /receiver
+    command: ["node", "server.mjs"]
+    volumes: ["./examples/merchant-receiver:/receiver:ro"]
+    ports: ["127.0.0.1:4100:4100"]
   web:
     build: .
     command: ["pnpm", "--filter", "@paybox/web", "start"]

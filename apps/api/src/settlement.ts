@@ -15,8 +15,10 @@ import {
   webhookEvents,
 } from '@paybox/db';
 import { transitionPayment } from '@paybox/shared';
+import type { Config } from './config';
 import { AppError } from './errors';
 import { enqueue, type JobHandler } from './jobs';
+import { notifyMerchant } from './notifications';
 import type { PaystackClient, VerifiedTransaction } from './provider/client';
 import { parseProviderJson } from './provider/http';
 import { Refunds } from './refunds';
@@ -124,7 +126,11 @@ export async function verifyPayment(db: Database, client: PaystackClient, id: st
     return applyVerification(tx, current!, remote, source);
   });
 }
-export function settlementHandlers(db: Database, client: PaystackClient): Record<string, JobHandler> {
+export function settlementHandlers(
+  db: Database,
+  client: PaystackClient,
+  config?: Config,
+): Record<string, JobHandler> {
   const refundService = new Refunds(db, client);
   return {
     create_refund: async (job) => {
@@ -180,8 +186,9 @@ export function settlementHandlers(db: Database, client: PaystackClient): Record
         throw error;
       }
     },
-    // A merchant without an endpoint has no delivery obligation; M8 supplies the HTTP handler.
-    notify_merchant: async () => {},
+    notify_merchant: async (job) => {
+      if (config) await notifyMerchant(db, config, job);
+    },
   };
 }
 export async function requestVerification(db: Database, id: string, correlationId: string) {

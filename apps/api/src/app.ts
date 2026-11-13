@@ -9,6 +9,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { authenticate } from './auth';
 import type { Config } from './config';
 import { AppError } from './errors';
+import { notificationRoutes } from './notifications';
 import { operationRoutes } from './operations';
 import { Payments } from './payments';
 import type { PaystackClient } from './provider/client';
@@ -256,6 +257,7 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
         .refund,
     ),
   );
+  notificationRoutes(app, db, config);
   operationRoutes(app, db);
   app.openAPIRegistry.registerComponent('securitySchemes', 'merchantKey', { type: 'http', scheme: 'bearer' });
   app.openAPIRegistry.registerComponent('securitySchemes', 'sessionCookie', {
