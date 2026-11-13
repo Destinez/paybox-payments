@@ -11,3 +11,6 @@ export function connectDatabase(url: string) {
 }
 export type Database = ReturnType<typeof connectDatabase>['db'];
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+export { migrate } from 'drizzle-orm/node-postgres/migrator';
+export * from './ledger';

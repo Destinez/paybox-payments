@@ -5,14 +5,14 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1794543828733,
-      "tag": "0000_initial_schema",
+      "when": 1794544461542,
+      "tag": "0000_product_schema",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1794543832726,
+      "when": 1794544514998,
       "tag": "0001_ledger_integrity",
       "breakpoints": true
     }
