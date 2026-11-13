@@ -14,6 +14,7 @@ import { Payments } from './payments';
 import type { PaystackClient } from './provider/client';
 import { FakePaystackClient } from './provider/fake';
 import { fakeRoutes } from './provider/routes';
+import { requestVerification } from './settlement';
 import { ingestWebhook } from './webhooks';
 
 export type Principal = {
@@ -198,6 +199,24 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
     { method: 'get', path: '/v1/payments/{id}', summary: 'Payment details and accounting timeline' },
     async (c) =>
       c.json(await service.detail(z.string().uuid().parse(c.req.param('id')), c.get('principal').merchantId)),
+  );
+  register(
+    app,
+    { method: 'post', path: '/v1/payments/{id}/verify', summary: 'Verify a payment through the outbox' },
+    async (c) => {
+      const payment = await service.find(
+        z.string().uuid().parse(c.req.param('id')),
+        c.get('principal').merchantId,
+      );
+      if (payment.status === 'created')
+        throw new AppError('invalid_state', 409, 'Payment has not initialized');
+      const job = await requestVerification(db, payment.id, payment.correlationId);
+      return c.json({
+        ...(await service.detail(payment.id, c.get('principal').merchantId)),
+        verification_pending: job?.status !== 'succeeded',
+        verification_job_id: job?.id,
+      });
+    },
   );
   operationRoutes(app, db);
   app.openAPIRegistry.registerComponent('securitySchemes', 'merchantKey', { type: 'http', scheme: 'bearer' });
