@@ -13,6 +13,7 @@ import { Payments } from './payments';
 import type { PaystackClient } from './provider/client';
 import { FakePaystackClient } from './provider/fake';
 import { fakeRoutes } from './provider/routes';
+import { ingestWebhook } from './webhooks';
 
 export type Principal = {
   merchantId?: string;
@@ -228,10 +229,28 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
       '<!doctype html><html lang="en"><title>Paybox API</title><h1>Paybox Payments API</h1><p>Amounts are integer kobo. Authenticate with a merchant test key.</p><a href="/v1/openapi.json">OpenAPI 3.0 specification</a></html>',
     ),
   );
+  register(
+    app,
+    {
+      method: 'post',
+      path: '/webhooks/paystack',
+      summary: 'Receive authenticated Paystack events',
+      public: true,
+    },
+    async (c) => {
+      await ingestWebhook(db, config, Buffer.from(await c.req.arrayBuffer()), {
+        current: c.req.header('Paystack-Signature'),
+        legacy: c.req.header('x-paystack-signature'),
+      });
+      return c.json({ received: true });
+    },
+  );
   if (client instanceof FakePaystackClient)
     app.route(
       '/fake',
-      fakeRoutes(client, async () => {}),
+      fakeRoutes(client, async (body, signature) => {
+        await ingestWebhook(db, config, Buffer.from(body), { current: signature });
+      }),
     );
   return { app, service };
 }
