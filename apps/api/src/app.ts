@@ -1,6 +1,6 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { type Database, newId, sql } from '@paybox/db';
-import { listPaymentsInput, paymentInput } from '@paybox/shared';
+import { listPaymentsInput, paymentInput, refundInput } from '@paybox/shared';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
@@ -14,6 +14,7 @@ import { Payments } from './payments';
 import type { PaystackClient } from './provider/client';
 import { FakePaystackClient } from './provider/fake';
 import { fakeRoutes } from './provider/routes';
+import { Refunds } from './refunds';
 import { requestVerification } from './settlement';
 import { ingestWebhook } from './webhooks';
 
@@ -217,6 +218,43 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
         verification_job_id: job?.id,
       });
     },
+  );
+  const refundService = new Refunds(db, client);
+  register(
+    app,
+    {
+      method: 'post',
+      path: '/v1/payments/{id}/refunds',
+      summary: 'Request a full or partial refund',
+      body: refundInput,
+      status: 202,
+    },
+    async (c) => {
+      const payment = await service.find(
+        z.string().uuid().parse(c.req.param('id')),
+        c.get('principal').merchantId,
+      );
+      const result = await refundService.request(
+        payment.merchantId,
+        payment.id,
+        c.req.header('Idempotency-Key'),
+        await c.req.json(),
+        c.get('principal').actor,
+      );
+      if (result.replayed) c.header('Idempotent-Replayed', 'true');
+      if (result.status >= 400)
+        return problem(
+          c,
+          new AppError(String(result.body.code), result.status as 422, String(result.body.detail)),
+        );
+      return c.json(result.body, 202);
+    },
+  );
+  register(app, { method: 'get', path: '/v1/refunds/{id}', summary: 'Retrieve a refund' }, async (c) =>
+    c.json(
+      (await refundService.find(z.string().uuid().parse(c.req.param('id')), c.get('principal').merchantId))
+        .refund,
+    ),
   );
   operationRoutes(app, db);
   app.openAPIRegistry.registerComponent('securitySchemes', 'merchantKey', { type: 'http', scheme: 'bearer' });

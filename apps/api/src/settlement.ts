@@ -19,6 +19,7 @@ import { AppError } from './errors';
 import { enqueue, type JobHandler } from './jobs';
 import type { PaystackClient, VerifiedTransaction } from './provider/client';
 import { parseProviderJson } from './provider/http';
+import { Refunds } from './refunds';
 import { webhookPayload } from './webhooks';
 
 export async function applyVerification(
@@ -90,17 +91,15 @@ export async function applyVerification(
         lines: [payable(payment.merchantId, 'debit', remote.fees), clearing('credit', remote.fees)],
       });
   }
-  await tx
-    .insert(paymentEvents)
-    .values({
-      paymentId: payment.id,
-      type: next,
-      fromStatus: payment.status,
-      toStatus: next,
-      source,
-      correlationId: payment.correlationId,
-      detail: { provider_status: remote.status, fees: remote.fees },
-    });
+  await tx.insert(paymentEvents).values({
+    paymentId: payment.id,
+    type: next,
+    fromStatus: payment.status,
+    toStatus: next,
+    source,
+    correlationId: payment.correlationId,
+    detail: { provider_status: remote.status, fees: remote.fees },
+  });
   if (['succeeded', 'failed'].includes(next))
     await enqueue(
       tx,
@@ -126,7 +125,11 @@ export async function verifyPayment(db: Database, client: PaystackClient, id: st
   });
 }
 export function settlementHandlers(db: Database, client: PaystackClient): Record<string, JobHandler> {
+  const refundService = new Refunds(db, client);
   return {
+    create_refund: async (job) => {
+      await refundService.process(String(job.payload.refund_id));
+    },
     purge_idempotency_keys: async () => {
       await db
         .delete(idempotencyKeys)
@@ -145,8 +148,13 @@ export function settlementHandlers(db: Database, client: PaystackClient): Record
           422,
           'Webhook references a transaction that does not exist locally',
         );
-      if (payload.event !== 'charge.success')
-        throw new AppError('unsupported_event', 422, 'Refund event processing requires a matching refund');
+      if (payload.event !== 'charge.success') {
+        if (!event.refundId)
+          throw new AppError('unknown_refund', 422, 'Webhook references an unknown refund');
+        await refundService.process(event.refundId);
+        await db.update(webhookEvents).set({ status: 'processed' }).where(eq(webhookEvents.id, event.id));
+        return;
+      }
       await enqueue(
         db,
         'verify_transaction',

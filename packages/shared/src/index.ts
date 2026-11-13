@@ -110,4 +110,5 @@ export * from './retry';
 export * from './schemas';
 export * from './signatures';
 export { paymentEventNames, paymentStateNames, transitionPayment } from './state/payment';
+export type { RefundEvent } from './state/refund';
 export { refundEventNames, refundStateNames, transitionRefund } from './state/refund';
