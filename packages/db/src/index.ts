@@ -1,9 +1,9 @@
-import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import pg from 'pg';
 import * as schema from './schema';
 
+export { and, asc, count, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 export * from './schema';
-export { sql, eq, and, or, desc, asc, inArray, isNull, lte, gte, count } from 'drizzle-orm';
 export function connectDatabase(url: string) {
   const pool = new pg.Pool({ connectionString: url, max: 12 });
   const db = drizzle(pool, { schema });
