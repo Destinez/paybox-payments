@@ -1,14 +1,15 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { and, apiKeys, type Database, eq, isNull, newId, sql } from '@paybox/db';
+import { type Database, newId, sql } from '@paybox/db';
 import { listPaymentsInput, paymentInput } from '@paybox/shared';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { authenticate } from './auth';
 import type { Config } from './config';
-import { safeEqual, sha256 } from './crypto';
 import { AppError } from './errors';
+import { operationRoutes } from './operations';
 import { Payments } from './payments';
 import type { PaystackClient } from './provider/client';
 import { FakePaystackClient } from './provider/fake';
@@ -134,17 +135,7 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
   );
   app.use('/v1/*', async (c, next) => {
     if (c.req.path === '/v1/openapi.json') return next();
-    const token = c.req.header('Authorization')?.replace(/^Bearer /, '');
-    const prefix = token?.slice(0, 24);
-    if (!token?.startsWith('pbx_test_sk_'))
-      throw new AppError('unauthorized', 401, 'A valid merchant API key is required');
-    const [key] = await db
-      .select()
-      .from(apiKeys)
-      .where(and(eq(apiKeys.prefix, prefix!), isNull(apiKeys.revokedAt)));
-    if (!key || !safeEqual(key.keyHash, sha256(token)))
-      throw new AppError('unauthorized', 401, 'A valid merchant API key is required');
-    c.set('principal', { merchantId: key.merchantId, actor: `api_key:${key.id}` });
+    await authenticate(c, db, config);
     await next();
   });
   app.onError((error, c) => {
@@ -208,6 +199,7 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
     async (c) =>
       c.json(await service.detail(z.string().uuid().parse(c.req.param('id')), c.get('principal').merchantId)),
   );
+  operationRoutes(app, db);
   app.openAPIRegistry.registerComponent('securitySchemes', 'merchantKey', { type: 'http', scheme: 'bearer' });
   app.openAPIRegistry.registerComponent('securitySchemes', 'sessionCookie', {
     type: 'apiKey',

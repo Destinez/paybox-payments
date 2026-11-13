@@ -85,14 +85,12 @@ export async function ingestWebhook(
     }
     await tx.insert(webhookDeliveries).values({ eventId: event.id, outcome: 'received' });
     if (supported.has(payload.event))
-      await tx
-        .insert(outboxJobs)
-        .values({
-          type: 'process_webhook_event',
-          aggregateId: payment?.id,
-          payload: { event_id: event.id, correlation_id: payment?.correlationId ?? event.id },
-          dedupeKey: `process_webhook:${event.id}`,
-        });
+      await tx.insert(outboxJobs).values({
+        type: 'process_webhook_event',
+        aggregateId: payment?.id,
+        payload: { event_id: event.id, correlation_id: payment?.correlationId ?? event.id },
+        dedupeKey: `process_webhook:${event.id}`,
+      });
     return { received: true, duplicate: false };
   });
 }

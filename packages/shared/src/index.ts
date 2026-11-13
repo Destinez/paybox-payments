@@ -106,5 +106,6 @@ export function parseNaira(value: string): number {
   return Number(amount);
 }
 
+export * from './retry';
 export * from './schemas';
 export * from './signatures';

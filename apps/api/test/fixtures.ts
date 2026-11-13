@@ -25,3 +25,33 @@ export async function fixture(db: Database) {
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
   };
 }
+
+export async function operatorFixture(
+  db: Database,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+  role: 'admin' | 'ops' | 'viewer' = 'ops',
+) {
+  const { dashboardUsers, sessions } = await import('@paybox/db');
+  const [user] = await db
+    .insert(dashboardUsers)
+    .values({
+      email: `${role}-${randomBytes(4).toString('hex')}@example.com`,
+      passwordHash: 'unused-test-hash',
+      role,
+    })
+    .returning();
+  const token = randomBytes(32).toString('hex'),
+    csrf = randomBytes(32).toString('hex');
+  await db
+    .insert(sessions)
+    .values({
+      userId: user!.id,
+      tokenHash: sha256(`${config.SESSION_SECRET}:${token}`),
+      csrfHash: sha256(csrf),
+      expiresAt: new Date(Date.now() + 3600000),
+    });
+  return {
+    user: user!,
+    headers: { Cookie: `paybox_session=${token}`, 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' },
+  };
+}
