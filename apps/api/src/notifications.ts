@@ -152,15 +152,13 @@ export function notificationRoutes(app: App, db: Database, config: Config) {
           .update(merchants)
           .set({ webhookUrl: url, webhookSecretEnc: encrypt(secret, config.DATA_KEY) })
           .where(eq(merchants.id, merchantId));
-        await tx
-          .insert(auditLog)
-          .values({
-            actor: c.get('principal').actor,
-            action: 'webhook_endpoint.updated',
-            targetType: 'merchant',
-            targetId: merchantId,
-            detail: { url },
-          });
+        await tx.insert(auditLog).values({
+          actor: c.get('principal').actor,
+          action: 'webhook_endpoint.updated',
+          targetType: 'merchant',
+          targetId: merchantId,
+          detail: { url },
+        });
       });
       return c.json({ url, secret });
     },

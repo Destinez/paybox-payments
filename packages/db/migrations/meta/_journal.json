@@ -15,6 +15,13 @@
       "when": 1794544514998,
       "tag": "0001_ledger_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794547318872,
+      "tag": "0002_reconciliation_checkpoints",
+      "breakpoints": true
     }
   ]
 }

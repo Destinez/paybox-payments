@@ -15,6 +15,7 @@ import { Payments } from './payments';
 import type { PaystackClient } from './provider/client';
 import { FakePaystackClient } from './provider/fake';
 import { fakeRoutes } from './provider/routes';
+import { reconciliationRoutes } from './reconciliation';
 import { Refunds } from './refunds';
 import { requestVerification } from './settlement';
 import { ingestWebhook } from './webhooks';
@@ -257,6 +258,7 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
         .refund,
     ),
   );
+  reconciliationRoutes(app, db, client);
   notificationRoutes(app, db, config);
   operationRoutes(app, db);
   app.openAPIRegistry.registerComponent('securitySchemes', 'merchantKey', { type: 'http', scheme: 'bearer' });

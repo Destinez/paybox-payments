@@ -357,3 +357,16 @@ export const fakeSettings = pgTable('fake_settings', {
   value: jsonb('value').$type<Record<string, unknown>>().notNull(),
   createdAt: created(),
 });
+
+export const reconciliationChecks = pgTable(
+  'reconciliation_checks',
+  {
+    id: id(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => reconciliationRuns.id),
+    reference: text('reference').notNull(),
+    createdAt: created(),
+  },
+  (t) => [uniqueIndex('reconciliation_check_unique').on(t.runId, t.reference)],
+);
