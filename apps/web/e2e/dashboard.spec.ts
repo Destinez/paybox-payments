@@ -1,4 +1,6 @@
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
@@ -51,4 +53,33 @@ test('viewer sees masked details and cannot initiate money movement', async ({ p
   await expect(page.getByRole('heading', { name: 'Payment timeline' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Issue refund', exact: true })).toHaveCount(0);
   await expect(page.getByText(/\*\*\*@example.com/)).toBeVisible();
+});
+
+test('x402 demo pays once, route editing works, and the tab is accessible on desktop and mobile', async ({
+  page,
+}) => {
+  await promisify(execFile)('pnpm', ['demo'], {
+    env: { ...process.env, COREPACK_HOME: '/tmp/paybox-corepack' },
+  });
+  await page.goto('/login');
+  await page.getByLabel('Email address').fill(credentials.email);
+  await page.getByLabel('Password', { exact: true }).fill(credentials.password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('link', { name: 'Paid endpoints', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Paid endpoints' })).toBeVisible();
+  await expect(page.getByText('settled', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '0.010000 USDC' })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit Stock availability' }).click();
+  await page.getByLabel('Price (USDC)').fill('0.02');
+  await page.getByRole('button', { name: 'Save priced route', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: '0.020000 USDC', exact: true })).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: '.local/x402-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: '.local/x402-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: 'Deactivate Stock availability' }).click();
+  await expect(page.getByText('inactive', { exact: true })).toBeVisible();
 });

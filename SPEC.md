@@ -17,6 +17,7 @@ The problems it solves are the ones that cost real Nigerian merchants money:
 - **The merchant's own server is down.** Notifications must survive, retry and be replayable. That's handled by the outbox, backoff and DLQ.
 - **A webhook never arrives, or the numbers don't agree.** A nightly reconciliation must catch it before finance does.
 - **Partial refunds** must never exceed what was paid, even under concurrent clicks.
+- **Selling an API to software, not people.** Automated clients and scripts can't click through a checkout page. Paybox lets a merchant price any API endpoint and get paid per request over **x402** (HTTP 402 Payment Required), with every payment on the same ledger as card payments. This is a headline feature (section 18).
 
 **Target users**
 
@@ -30,22 +31,25 @@ The problems it solves are the ones that cost real Nigerian merchants money:
 
 Run `docker compose up` with `PAYSTACK_MODE=fake`, then `pnpm demo:seed`. The fake processor makes the demo deterministic and offline. The same script works against real Paystack test mode, except step 5, which needs the fake's drift control.
 
-| t    | Action                                                                                                                                    | What the viewer sees                                                                                                                    |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 0:00 | Dashboard home                                                                                                                            | KPIs: volume today (₦), success rate, DLQ depth 0, last recon run green                                                                 |
-| 0:15 | `scripts/demo/01-create.sh` sends `POST /v1/payments` with `Idempotency-Key: demo-1` **twice**, then a third time with a different amount | 201, then 201 with `Idempotent-Replayed: true` and the same payment id, then **409 `idempotency_key_reuse`**. One row in the dashboard. |
-| 0:35 | Open `authorization_url` and pay with test card `4084 0840 8408 4081` (fake checkout: "Succeed")                                          | Timeline: `created → pending → succeeded`. Ledger entry posted and balanced.                                                            |
-| 0:50 | `02-replay-webhook.sh` re-sends the same signed `charge.success` 3 times                                                                  | Webhook log shows 1 `processed` and 3 `duplicate`. Merchant balance unchanged.                                                          |
-| 1:05 | Toggle the merchant's webhook receiver to "return 500" (`03-break-merchant.sh`) and make a second payment                                 | Outbox job attempts 1→8 with growing backoff (demo uses a compressed schedule), then **DEAD**. DLQ badge = 1.                           |
-| 1:25 | Fix the receiver, click **Replay** in DLQ                                                                                                 | Job → `succeeded`. The attempt history is kept. An audit log entry names who replayed it.                                               |
-| 1:35 | `04-drift.sh` makes the fake report a different amount for payment #2, then run reconciliation                                            | Report: **1 mismatch `amount_mismatch` (local ₦15,000 vs processor ₦14,500)**, flagged and not auto-fixed.                              |
-| 1:50 | Partial refund of ₦5,000, then try to refund ₦20,000                                                                                      | Refund `pending → processed`. Second refund **422 `refund_exceeds_refundable`**.                                                        |
+| t    | Action                                                                                                                                                                                                            | What the viewer sees                                                                                                                                                                                            |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0:00 | Dashboard home                                                                                                                                                                                                    | KPIs: volume today (₦), success rate, DLQ depth 0, last recon run green                                                                                                                                         |
+| 0:15 | `scripts/demo/01-create.sh` sends `POST /v1/payments` with `Idempotency-Key: demo-1` **twice**, then a third time with a different amount                                                                         | 201, then 201 with `Idempotent-Replayed: true` and the same payment id, then **409 `idempotency_key_reuse`**. One row in the dashboard.                                                                         |
+| 0:35 | Open `authorization_url` and pay with test card `4084 0840 8408 4081` (fake checkout: "Succeed")                                                                                                                  | Timeline: `created → pending → succeeded`. Ledger entry posted and balanced.                                                                                                                                    |
+| 0:50 | `02-replay-webhook.sh` re-sends the same signed `charge.success` 3 times                                                                                                                                          | Webhook log shows 1 `processed` and 3 `duplicate`. Merchant balance unchanged.                                                                                                                                  |
+| 1:05 | Toggle the merchant's webhook receiver to "return 500" (`03-break-merchant.sh`) and make a second payment                                                                                                         | Outbox job attempts 1→8 with growing backoff (demo uses a compressed schedule), then **DEAD**. DLQ badge = 1.                                                                                                   |
+| 1:25 | Fix the receiver, click **Replay** in DLQ                                                                                                                                                                         | Job → `succeeded`. The attempt history is kept. An audit log entry names who replayed it.                                                                                                                       |
+| 1:35 | `04-drift.sh` makes the fake report a different amount for payment #2, then run reconciliation                                                                                                                    | Report: **1 mismatch `amount_mismatch` (local ₦15,000 vs processor ₦14,500)**, flagged and not auto-fixed.                                                                                                      |
+| 1:50 | Partial refund of ₦5,000, then try to refund ₦20,000                                                                                                                                                              | Refund `pending → processed`. Second refund **422 `refund_exceeds_refundable`**.                                                                                                                                |
+| 2:05 | `05-agent-pays.sh`: a script acting as an automated client calls the merchant's priced endpoint `GET /x402/m/demo-store/v1/stock` with no payment, reads the 402, pays and retries; then replays the same payment | First call **402** with a `PAYMENT-REQUIRED` challenge. Second call **200** with data and a `PAYMENT-RESPONSE` receipt. Replay is rejected. Dashboard x402 tab shows the payment and the balanced ledger entry. |
 
 ## 3. Scope and non-goals
 
 **In scope:** one-off card/bank/transfer payments via Paystack Standard (redirect checkout), verify, webhooks, refunds (full and partial), merchant-facing outbound webhooks, idempotency, outbox worker, DLQ and replay, a double-entry ledger, reconciliation, a dashboard, a Paystack fake, tests, CI, OpenAPI and docker compose. Single currency **NGN**, with amounts in **kobo integers** everywhere.
 
-**Non-goals:** live mode or real money; payouts/transfers; subscriptions and plans; split payments and subaccounts; card vaulting or charge-authorization; disputes (events are stored but not acted on); multi-currency and FX; PCI scope (cards never touch Paybox, since checkout is Paystack-hosted); KYC; mobile apps.
+**Also in scope:** x402 paid endpoints (section 18), testnet only.
+
+**Non-goals:** live mode or real money (x402 runs on testnet only); payouts/transfers; subscriptions and plans; split payments and subaccounts; card vaulting or charge-authorization; disputes (events are stored but not acted on); multi-currency and FX; PCI scope (cards never touch Paybox, since checkout is Paystack-hosted); KYC; mobile apps.
 
 ## 4. Architecture
 
@@ -274,21 +278,22 @@ Coverage gate: `packages/shared` ≥ 90 % lines, `apps/api` ≥ 80 %.
 
 ## 15. Milestones (build in this order)
 
-| #   | Milestone                                     | Acceptance criteria                                                                                                                                                                                                                                                 |
-| --- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0  | Scaffold                                      | pnpm workspaces, TS strict, Biome, Vitest, compose (postgres, api, worker, web), CI runs lint, typecheck and test on an empty suite                                                                                                                                 |
-| M1  | Schema and ledger core                        | Migrations for section 6. `postEntry()` rejects unbalanced entries (test). The append-only triggers work (test).                                                                                                                                                    |
-| M2  | Paystack client and fake                      | Interface plus both implementations. Fake checkout page; signs webhooks with `whsec_`; fault controls `/fake/control` (duplicate, delay, drift, 500). Contract tests run the same suite against the fake (and against test mode when `PAYSTACK_SECRET_KEY` is set). |
-| M3  | Payments API and idempotency                  | `POST/GET /payments` match section 7. All idempotency tests green. OpenAPI generated from route schemas.                                                                                                                                                            |
-| M4  | Webhook ingest                                | Both signature schemes, dedupe by `event_key`, 200 within 100 ms p95 locally, raw body stored                                                                                                                                                                       |
-| M5  | Outbox worker, retries, DLQ                   | Policy in section 10, crash-recovery test, DLQ list and replay API, audit entries                                                                                                                                                                                   |
-| M6  | Verify-driven transitions and ledger postings | Section 8 rules enforced. Property test green.                                                                                                                                                                                                                      |
-| M7  | Refunds                                       | Full and partial, the 409 path fetches the existing refund, the concurrency test is green, ledger rows posted                                                                                                                                                       |
-| M8  | Merchant webhooks                             | Signed delivery, retries, DLQ. Sample receiver in `examples/merchant-receiver` with a "fail" toggle.                                                                                                                                                                |
-| M9  | Reconciliation                                | Section 11 kinds. Report API. Scheduled run.                                                                                                                                                                                                                        |
-| M10 | Dashboard                                     | Payments list (filters for status, date and search by reference or email), detail timeline, refund action, DLQ with replay, recon report with resolve, login and roles. Mobile-responsive. axe clean.                                                               |
-| M11 | Hardening and observability                   | Rate limits, metrics, correlation ids end-to-end, CSRF, security headers, `sk_live_` guard                                                                                                                                                                          |
-| M12 | Demo and docs                                 | `pnpm demo` script, Playwright demo test, README with mermaid architecture and sequence diagrams, screenshots/GIF, `docs/adr/*` (outbox vs queue, verify-before-credit, ledger design)                                                                              |
+| #    | Milestone                                     | Acceptance criteria                                                                                                                                                                                                                                                 |
+| ---- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0   | Scaffold                                      | pnpm workspaces, TS strict, Biome, Vitest, compose (postgres, api, worker, web), CI runs lint, typecheck and test on an empty suite                                                                                                                                 |
+| M1   | Schema and ledger core                        | Migrations for section 6. `postEntry()` rejects unbalanced entries (test). The append-only triggers work (test).                                                                                                                                                    |
+| M2   | Paystack client and fake                      | Interface plus both implementations. Fake checkout page; signs webhooks with `whsec_`; fault controls `/fake/control` (duplicate, delay, drift, 500). Contract tests run the same suite against the fake (and against test mode when `PAYSTACK_SECRET_KEY` is set). |
+| M3   | Payments API and idempotency                  | `POST/GET /payments` match section 7. All idempotency tests green. OpenAPI generated from route schemas.                                                                                                                                                            |
+| M4   | Webhook ingest                                | Both signature schemes, dedupe by `event_key`, 200 within 100 ms p95 locally, raw body stored                                                                                                                                                                       |
+| M5   | Outbox worker, retries, DLQ                   | Policy in section 10, crash-recovery test, DLQ list and replay API, audit entries                                                                                                                                                                                   |
+| M6   | Verify-driven transitions and ledger postings | Section 8 rules enforced. Property test green.                                                                                                                                                                                                                      |
+| M7   | Refunds                                       | Full and partial, the 409 path fetches the existing refund, the concurrency test is green, ledger rows posted                                                                                                                                                       |
+| M8   | Merchant webhooks                             | Signed delivery, retries, DLQ. Sample receiver in `examples/merchant-receiver` with a "fail" toggle.                                                                                                                                                                |
+| M9   | Reconciliation                                | Section 11 kinds. Report API. Scheduled run.                                                                                                                                                                                                                        |
+| M10  | Dashboard                                     | Payments list (filters for status, date and search by reference or email), detail timeline, refund action, DLQ with replay, recon report with resolve, login and roles. Mobile-responsive. axe clean.                                                               |
+| M10x | x402 paid endpoints (headline feature)        | Everything in section 18.6. Build this immediately after M10, before M11.                                                                                                                                                                                           |
+| M11  | Hardening and observability                   | Rate limits, metrics, correlation ids end-to-end, CSRF, security headers, `sk_live_` guard                                                                                                                                                                          |
+| M12  | Demo and docs                                 | `pnpm demo` script, Playwright demo test, README with mermaid architecture and sequence diagrams, screenshots/GIF, `docs/adr/*` (outbox vs queue, verify-before-credit, ledger design)                                                                              |
 
 ## 16. Definition of done
 
@@ -306,6 +311,50 @@ Coverage gate: `packages/shared` ≥ 90 % lines, `apps/api` ≥ 80 %.
 3. **Real Paystack test account:** the fake is enough for CI and the demo. A real test key and `whsec_` secret are only needed to run contract tests against Paystack test mode.
 4. **Hosting** for a public demo (e.g. Fly.io/Render + Neon) or local-only with a GIF.
 
+## 18. x402 paid endpoints (headline feature)
+
+### 18.1 What it is
+
+x402 is an open standard that revives HTTP status 402 so an API can charge per request and any client, including an automated client, can pay inside the HTTP exchange with no account, no API key and no checkout page. Paybox turns this into a merchant feature: a merchant prices an endpoint in the dashboard, and Paybox collects, verifies, settles, records and notifies, exactly like a card payment.
+
+### 18.2 Protocol facts (read the current spec before coding; links in Appendix)
+
+- Server answers an unpaid request with **402** and a base64 `PaymentRequired` object in the `PAYMENT-REQUIRED` header (and as JSON in the body).
+- Client picks one `PaymentRequirements` entry (`scheme`, `network`, amount, asset, `payTo`, resource) and retries with a `PaymentPayload` in the `PAYMENT-SIGNATURE` header.
+- Server verifies (facilitator `/verify` or locally), does the work, settles (facilitator `/settle`), and returns **200** with a base64 settlement result in the `PAYMENT-RESPONSE` header.
+- Use scheme **`exact`** on an **EVM testnet** (Base Sepolia, USDC test token) via the official `@x402/*` TypeScript packages (`@x402/core`, `@x402/evm`, and the server adapter matching our framework: `@x402/fastify` or `@x402/hono`; `@x402/fetch` for the demo client). Verify package names and header names against the repo at build time; if v2 headers differ from the above, follow the repo.
+- Testnet facilitator: the public x402.org facilitator. Never mainnet, never real funds. Config guard rejects mainnet network ids, the same way `sk_live_` is rejected.
+
+### 18.3 Product behaviour
+
+- **Priced routes:** `x402_routes` table (merchant_id, method, path, upstream_url, price in asset base units, asset, network, pay_to address, description, active). CRUD via `/v1/x402/routes` and a dashboard screen.
+- **Gateway:** `ANY /x402/m/:merchantSlug/*` matches a priced route, runs the x402 flow, and on a verified payment proxies to the merchant's `upstream_url` with a signed `Paybox-X402-Payment` header (HMAC like merchant webhooks) so the upstream can trust it. Settle **after** a successful upstream response (2xx); on upstream failure do not settle and return the upstream error.
+- **Replay and double-spend:** a payment payload (its nonce/authorization id) is usable once. Store it with a unique constraint; a second use returns 402 `payment_already_used`. Settlement is idempotent on that key.
+- **Ledger:** x402 payments post balanced entries in a **separate USDC book** (`asset = 'USDC'`, integer base units, 6 decimals). No FX, never mixed with NGN totals; the dashboard shows the two books side by side. This is the one exception to "NGN only".
+- **Merchant webhook:** `x402.payment.settled` delivered through the existing outbox, retries and DLQ.
+- **Dashboard:** x402 tab with priced routes, payments (payer address, route, amount, tx hash linking to the testnet explorer, status) and the USDC book.
+- **Fake facilitator:** like the Paystack fake, an offline fake facilitator (`X402_MODE=fake`) with controls: verify ok/fail, settle ok/fail/delay. CI and `pnpm demo` use it; `X402_MODE=testnet` uses the real facilitator.
+- **Demo client:** `scripts/demo/05-agent-pays.sh` (or a small TS script) using `@x402/fetch` with a throwaway testnet key from env, never committed.
+
+### 18.4 Errors
+
+Problem Details as elsewhere: `payment_required`, `payment_invalid`, `payment_already_used`, `settlement_failed` (502), `route_not_found`, `network_not_allowed`.
+
+### 18.5 Docs and selling points
+
+README gets a top-level "Get paid by automated clients (x402)" section with a sequence diagram (client, Paybox gateway, facilitator, merchant upstream, ledger) and the demo GIF step. ADR `docs/adr/x402-gateway.md`: why settle after the upstream succeeds, why a separate USDC book, why a gateway rather than a merchant SDK.
+
+### 18.6 Acceptance criteria (M10x)
+
+1. Unpaid request returns 402 with a valid `PAYMENT-REQUIRED` challenge (test decodes and validates it).
+2. Paid request with the fake facilitator returns 200, upstream receives a valid signed header, `PAYMENT-RESPONSE` is present, ledger entry balanced in the USDC book.
+3. Reused payment returns 402 `payment_already_used`; concurrent double-submit settles once (test).
+4. Upstream 5xx means no settlement and no ledger entry (test).
+5. Settle failure means no ledger entry, the payment is marked `settlement_failed`, and the client gets 502 (test).
+6. `x402.payment.settled` merchant webhook delivered via the outbox (test).
+7. Mainnet network ids are rejected at config load (test).
+8. Dashboard x402 tab works and is axe clean; demo step 2:05 runs in `pnpm demo`.
+
 ## Appendix: sources (checked 13 Nov 2026)
 
 - Transactions API (initialize, verify, id as unsigned 64-bit): https://paystack.com/docs/api/transaction/
@@ -313,4 +362,5 @@ Coverage gate: `packages/shared` ≥ 90 % lines, `apps/api` ≥ 80 %.
 - Refunds API: https://paystack.com/docs/api/refund/
 - Refunds guide (reference rules, 409 on reuse, statuses, `refund.*` events): https://paystack.com/docs/payments/refunds/
 - Test payments (cards): https://paystack.com/docs/payments/test-payments/
+- x402 standard, flow, headers, SDK packages (checked 14 Nov 2026): https://github.com/x402-foundation/x402 and https://docs.x402.org
 - Problem Details for HTTP APIs: https://www.rfc-editor.org/rfc/rfc9457

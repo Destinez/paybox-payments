@@ -22,7 +22,7 @@ export async function enqueue(
   aggregateId: string | null,
   payload: Record<string, unknown>,
   dedupeKey: string,
-  runAfter = new Date(),
+  runAfter?: Date,
 ) {
   const [job] = await tx
     .insert(outboxJobs)
@@ -79,7 +79,7 @@ export class JobRunner {
           .set({
             status: 'in_flight',
             leaseOwner: newId(),
-            leasedUntil: new Date(Date.now() + 30000),
+            leasedUntil: sql`now() + interval '30 seconds'`,
             attempts: row.attempts + 1,
             totalAttempts: row.totalAttempts + 1,
           })
@@ -96,7 +96,7 @@ export class JobRunner {
     const heartbeat = setInterval(() => {
       void this.db
         .update(outboxJobs)
-        .set({ leasedUntil: new Date(Date.now() + 30000) })
+        .set({ leasedUntil: sql`now() + interval '30 seconds'` })
         .where(ownership)
         .catch(() => {});
     }, 10000);
@@ -137,7 +137,7 @@ export class JobRunner {
           leasedUntil: null,
           leaseOwner: null,
           runAfter: failure
-            ? new Date(Date.now() + backoff(job.attempts, { demo: this.demo, retryAfterMs }))
+            ? sql`now() + ${backoff(job.attempts, { demo: this.demo, retryAfterMs })} * interval '1 millisecond'`
             : owned.runAfter,
         })
         .where(ownership);
@@ -167,7 +167,7 @@ export class JobRunner {
         .set({
           status: 'pending',
           attempts: 0,
-          runAfter: new Date(),
+          runAfter: sql`now()`,
           leasedUntil: null,
           leaseOwner: null,
           lastError: null,

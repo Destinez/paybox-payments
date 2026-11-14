@@ -23,6 +23,7 @@ import type { PaystackClient, VerifiedTransaction } from './provider/client';
 import { parseProviderJson } from './provider/http';
 import { Refunds } from './refunds';
 import { webhookPayload } from './webhooks';
+import { finalizeX402 } from './x402/accounting';
 
 export async function applyVerification(
   tx: Transaction,
@@ -133,6 +134,9 @@ export function settlementHandlers(
 ): Record<string, JobHandler> {
   const refundService = new Refunds(db, client);
   return {
+    finalize_x402: async (job) => {
+      await finalizeX402(db, String(job.payload.x402_payment_id));
+    },
     create_refund: async (job) => {
       await refundService.process(String(job.payload.refund_id));
     },

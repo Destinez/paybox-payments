@@ -22,6 +22,8 @@ export function validateEntry(lines: PostingLine[]): void {
 export async function postEntry(
   tx: Transaction,
   input: {
+    currency?: 'NGN' | 'USDC';
+    x402PaymentId?: string;
     kind: string;
     paymentId?: string;
     refundId?: string;
@@ -48,10 +50,20 @@ export async function postEntry(
   for (const line of lines) {
     const [account] = await tx
       .insert(ledgerAccounts)
-      .values({ code: line.code, type: line.type, merchantId: line.merchantId })
+      .values({
+        code: line.code,
+        type: line.type,
+        merchantId: line.merchantId,
+        currency: input.currency ?? 'NGN',
+      })
       .onConflictDoUpdate({ target: ledgerAccounts.code, set: { code: sql`excluded.code` } })
       .returning();
-    if (!account || account.type !== line.type || account.merchantId !== (line.merchantId ?? null))
+    if (
+      !account ||
+      account.type !== line.type ||
+      account.merchantId !== (line.merchantId ?? null) ||
+      account.currency !== (input.currency ?? 'NGN')
+    )
       throw new Error('Ledger account identity mismatch');
     await tx
       .insert(ledgerLines)

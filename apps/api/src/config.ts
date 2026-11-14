@@ -4,6 +4,9 @@ import { z } from 'zod';
 
 const environment = z.object({
   PAYSTACK_MODE: z.enum(['fake', 'test']).default('fake'),
+  X402_MODE: z.enum(['fake', 'testnet']).default('fake'),
+  X402_NETWORK: z.string().default('eip155:84532'),
+  X402_FACILITATOR_URL: z.literal('https://x402.org/facilitator').default('https://x402.org/facilitator'),
   PAYSTACK_SECRET_KEY: z.string().default(''),
   PAYSTACK_WEBHOOK_SECRETS: z.string().default(''),
   PAYSTACK_ACCEPT_LEGACY_SIGNATURE: z.enum(['true', 'false']).default('false'),
@@ -18,6 +21,8 @@ const environment = z.object({
 });
 export function readEnvironment(env: NodeJS.ProcessEnv = process.env) {
   const config = environment.parse(env);
+  if (config.X402_NETWORK !== 'eip155:84532')
+    throw new Error('network_not_allowed: only Base Sepolia is supported');
   if (config.PAYSTACK_SECRET_KEY.startsWith('sk_live_')) throw new Error('Live keys are prohibited');
   if (config.PAYSTACK_MODE === 'test') {
     if (!/^sk_test_.+/.test(config.PAYSTACK_SECRET_KEY)) throw new Error('A Paystack test key is required');

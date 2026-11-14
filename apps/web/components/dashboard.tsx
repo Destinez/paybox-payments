@@ -27,7 +27,15 @@ import { PaymentForm } from './payment-form';
 import { PaymentsList } from './payments-list';
 import { Settings } from './settings';
 import { ErrorNotice } from './ui';
-export type Page = 'overview' | 'payments' | 'detail' | 'dead-letters' | 'reconciliation' | 'settings';
+import { X402 } from './x402';
+export type Page =
+  | 'overview'
+  | 'payments'
+  | 'detail'
+  | 'dead-letters'
+  | 'reconciliation'
+  | 'settings'
+  | 'x402';
 const titles: Record<Page, string> = {
   overview: 'Overview',
   payments: 'Payments',
@@ -35,6 +43,7 @@ const titles: Record<Page, string> = {
   'dead-letters': 'Dead-letter queue',
   reconciliation: 'Reconciliation',
   settings: 'Access & settings',
+  x402: 'Paid endpoints',
 };
 export function Dashboard({ page = 'overview', paymentId }: { page?: Page; paymentId?: string }) {
   const session = useResource<{ user: User; csrf_token: string; mode: string }>('/session', 0);
@@ -78,6 +87,7 @@ export function Dashboard({ page = 'overview', paymentId }: { page?: Page; payme
         <nav>
           {[
             { id: 'overview', href: '/', label: 'Overview', icon: LayoutDashboard },
+            { id: 'x402', href: '/x402', label: 'Paid endpoints', icon: BookOpen },
             { id: 'payments', href: '/payments', label: 'Payments', icon: ArrowDownLeft },
             { id: 'dead-letters', href: '/dead-letters', label: 'Dead-letter queue', icon: Wallet },
             { id: 'reconciliation', href: '/reconciliation', label: 'Reconciliation', icon: CheckCheck },
@@ -212,6 +222,7 @@ export function Dashboard({ page = 'overview', paymentId }: { page?: Page; payme
           {page === 'detail' && paymentId && <PaymentDetail id={paymentId} user={user} />}{' '}
           {page === 'dead-letters' && <DeadLetters user={user} />}{' '}
           {page === 'reconciliation' && <Reconciliation user={user} />}{' '}
+          {page === 'x402' && <X402 user={user} />}
           {page === 'settings' && <Settings user={user} />}
           <footer className="page-footer">
             <span>

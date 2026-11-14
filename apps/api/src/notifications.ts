@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { auditLog, type Database, eq, merchants, payments, refunds } from '@paybox/db';
+import { auditLog, type Database, eq, merchants, payments, refunds, x402Payments } from '@paybox/db';
 import { signMerchant } from '@paybox/shared';
 import { z } from 'zod';
 import { type App, register } from './app';
@@ -62,7 +62,8 @@ export async function deliver(
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(body),
         },
-        lookup: (_hostname, _options, callback) => callback(null, address.address, address.family),
+        lookup: (_hostname, options, callback) =>
+          options.all ? callback(null, [address]) : callback(null, address.address, address.family),
         timeout: 10000,
       },
       (response) => {
@@ -98,28 +99,47 @@ export async function notifyMerchant(db: Database, config: Config, job: Job) {
     .from(merchants)
     .where(eq(merchants.id, String(job.payload.merchant_id)));
   if (!merchant?.webhookUrl || !merchant.webhookSecretEnc) return;
-  const [payment] = await db
-    .select()
-    .from(payments)
-    .where(eq(payments.id, String(job.payload.payment_id)));
-  if (!payment) throw new AppError('not_found', 404, 'Notification payment not found');
-  const [refund] = job.payload.refund_id
-    ? await db
-        .select()
-        .from(refunds)
-        .where(eq(refunds.id, String(job.payload.refund_id)))
-    : [];
-  const body = JSON.stringify({
-    id: `evt_${job.id}`,
-    type: job.payload.event,
-    created_at: job.createdAt.toISOString(),
-    data: {
+  let data: Record<string, unknown>;
+  if (job.payload.x402_payment_id) {
+    const [payment] = await db
+      .select()
+      .from(x402Payments)
+      .where(eq(x402Payments.id, String(job.payload.x402_payment_id)));
+    if (payment?.status !== 'settled') throw new AppError('not_found', 404, 'Settled payment not found');
+    data = {
+      payment_id: payment.id,
+      route_id: payment.routeId,
+      payer: payment.payer,
+      amount: String(payment.amount),
+      asset: 'USDC',
+      network: payment.network,
+      transaction: payment.transactionHash,
+    };
+  } else {
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.id, String(job.payload.payment_id)));
+    if (!payment) throw new AppError('not_found', 404, 'Notification payment not found');
+    const [refund] = job.payload.refund_id
+      ? await db
+          .select()
+          .from(refunds)
+          .where(eq(refunds.id, String(job.payload.refund_id)))
+      : [];
+    data = {
       payment_id: payment.id,
       reference: payment.reference,
       amount: refund?.amount ?? payment.amount,
       currency: payment.currency,
       ...(refund ? { refund_id: refund.id, refund_reference: refund.reference } : {}),
-    },
+    };
+  }
+  const body = JSON.stringify({
+    id: `evt_${job.id}`,
+    type: job.payload.event,
+    created_at: job.createdAt.toISOString(),
+    data,
   });
   await deliver(
     merchant.webhookUrl,

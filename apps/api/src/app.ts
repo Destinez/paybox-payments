@@ -20,6 +20,7 @@ import { reconciliationRoutes } from './reconciliation';
 import { Refunds } from './refunds';
 import { requestVerification } from './settlement';
 import { ingestWebhook } from './webhooks';
+import { x402Routes as registerX402 } from './x402/routes';
 
 export type Principal = {
   merchantId?: string;
@@ -127,8 +128,14 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
     cors({
       origin: config.WEB_URL,
       credentials: true,
-      allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-CSRF-Token'],
-      exposeHeaders: ['X-Request-Id', 'Idempotent-Replayed', 'Retry-After'],
+      allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-CSRF-Token', 'PAYMENT-SIGNATURE'],
+      exposeHeaders: [
+        'X-Request-Id',
+        'Idempotent-Replayed',
+        'Retry-After',
+        'PAYMENT-REQUIRED',
+        'PAYMENT-RESPONSE',
+      ],
     }),
   );
   app.use(
@@ -269,6 +276,7 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
   reconciliationRoutes(app, db, client);
   notificationRoutes(app, db, config);
   operationRoutes(app, db);
+  registerX402(app, db, config);
   app.openAPIRegistry.registerComponent('securitySchemes', 'merchantKey', { type: 'http', scheme: 'bearer' });
   app.openAPIRegistry.registerComponent('securitySchemes', 'sessionCookie', {
     type: 'apiKey',

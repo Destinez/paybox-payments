@@ -26,6 +26,9 @@ services:
     build: .
     environment: &service_env
       DATABASE_URL: postgres://paybox:paybox@postgres:5432/paybox
+      X402_MODE: ${X402_MODE:-fake}
+      X402_NETWORK: ${X402_NETWORK:-eip155:84532}
+      DEMO_RECEIVER_URL: http://merchant-receiver:4100
       PAYSTACK_MODE: ${PAYSTACK_MODE:-fake}
       PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY:-}
       PAYSTACK_WEBHOOK_SECRETS: ${PAYSTACK_WEBHOOK_SECRETS:-}

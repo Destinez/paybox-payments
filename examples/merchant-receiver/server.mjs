@@ -32,6 +32,23 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify({ fail, received: receipts.size, events: [...receipts.values()] }));
     return;
   }
+  if (req.url === '/stock' && req.method === 'GET') {
+    const header = req.headers['paybox-x402-payment'];
+    const match =
+      typeof header === 'string' ? /^t=(\d+),v1=([a-f0-9]{128}),data=([A-Za-z0-9_-]+)$/.exec(header) : null;
+    if (!secret || !match || Math.abs(Date.now() / 1000 - Number(match[1])) > 300) {
+      res.writeHead(401).end('{}');
+      return;
+    }
+    const metadata = Buffer.from(match[3], 'base64url');
+    const expected = createHmac('sha512', secret).update(`${match[1]}.`).update(metadata).digest();
+    if (!timingSafeEqual(expected, Buffer.from(match[2], 'hex'))) {
+      res.writeHead(401).end('{}');
+      return;
+    }
+    res.writeHead(fail ? 503 : 200).end(JSON.stringify({ sku: 'ADA-001', available: 42 }));
+    return;
+  }
   if (req.url !== '/webhook' || req.method !== 'POST') {
     res.writeHead(404).end('{}');
     return;

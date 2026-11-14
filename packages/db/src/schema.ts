@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   customType,
   index,
@@ -44,6 +45,7 @@ export const refundStatus = pgEnum('refund_status', [
 export const jobStatus = pgEnum('job_status', ['pending', 'in_flight', 'succeeded', 'dead']);
 
 export const merchants = pgTable('merchants', {
+  slug: text('slug').notNull().unique().default(sql`'m-' || gen_random_uuid()::text`),
   id: id(),
   name: text('name').notNull(),
   webhookUrl: text('webhook_url'),
@@ -257,6 +259,8 @@ export const ledgerAccounts = pgTable('ledger_accounts', {
   createdAt: created(),
 });
 export const journalEntries = pgTable('journal_entries', {
+  currency: text('currency').notNull().default('NGN'),
+  x402PaymentId: uuid('x402_payment_id').references(() => x402Payments.id),
   id: id(),
   kind: text('kind').notNull(),
   paymentId: uuid('payment_id').references(() => payments.id),
@@ -370,3 +374,65 @@ export const reconciliationChecks = pgTable(
   },
   (t) => [uniqueIndex('reconciliation_check_unique').on(t.runId, t.reference)],
 );
+
+export const x402Routes = pgTable(
+  'x402_routes',
+  {
+    id: id(),
+    merchantId: uuid('merchant_id')
+      .notNull()
+      .references(() => merchants.id),
+    method: text('method').notNull(),
+    path: text('path').notNull(),
+    upstreamUrl: text('upstream_url').notNull(),
+    price: money('price').notNull(),
+    asset: text('asset').notNull(),
+    network: text('network').notNull(),
+    payTo: text('pay_to').notNull(),
+    description: text('description').notNull(),
+    active: boolean('active').notNull().default(true),
+    createdAt: created(),
+  },
+  (t) => [
+    uniqueIndex('x402_route_unique').on(t.merchantId, t.method, t.path),
+    check('x402_price_valid', sql`${t.price}>0 AND ${t.price}<=10000000000`),
+    check('x402_testnet_only', sql`${t.network}='eip155:84532'`),
+  ],
+);
+export const x402Payments = pgTable(
+  'x402_payments',
+  {
+    id: id(),
+    merchantId: uuid('merchant_id')
+      .notNull()
+      .references(() => merchants.id),
+    routeId: uuid('route_id')
+      .notNull()
+      .references(() => x402Routes.id),
+    nonceKey: text('nonce_key').notNull().unique(),
+    payer: text('payer').notNull(),
+    amount: money('amount').notNull(),
+    asset: text('asset').notNull(),
+    network: text('network').notNull(),
+    payTo: text('pay_to').notNull(),
+    status: text('status').notNull().default('verified'),
+    transactionHash: text('transaction_hash'),
+    receipt: jsonb('receipt').$type<Record<string, unknown>>(),
+    requestHash: text('request_hash').notNull(),
+    correlationId: text('correlation_id').notNull(),
+    lastError: text('last_error'),
+    settlementStartedAt: time('settlement_started_at'),
+    settledAt: time('settled_at'),
+    createdAt: created(),
+  },
+  (t) => [
+    check('x402_payment_amount_valid', sql`${t.amount}>0 AND ${t.amount}<=10000000000`),
+    index('x402_payment_merchant').on(t.merchantId, t.createdAt),
+  ],
+);
+export const fakeSettlements = pgTable('fake_settlements', {
+  id: id(),
+  nonceKey: text('nonce_key').notNull().unique(),
+  receipt: jsonb('receipt').$type<Record<string, unknown>>().notNull(),
+  createdAt: created(),
+});

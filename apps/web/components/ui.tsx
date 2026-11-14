@@ -3,8 +3,17 @@ import { Check, Clock3, TriangleAlert, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { human } from '../lib/api';
 export function Badge({ status }: { status: string }) {
-  const good = ['succeeded', 'processed', 'completed', 'matched', 'auto_healed', 'resolved'].includes(status),
-    bad = ['failed', 'dead', 'open', 'mismatched'].includes(status);
+  const good = [
+      'settled',
+      'active',
+      'succeeded',
+      'processed',
+      'completed',
+      'matched',
+      'auto_healed',
+      'resolved',
+    ].includes(status),
+    bad = ['settlement_failed', 'upstream_failed', 'failed', 'dead', 'open', 'mismatched'].includes(status);
   const Icon = good ? Check : bad ? TriangleAlert : Clock3;
   return (
     <span className={`badge ${good ? 'good' : bad ? 'bad' : 'neutral'}`}>

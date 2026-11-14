@@ -9,13 +9,16 @@ import {
   fakeTransactions,
   merchants,
   payments,
+  x402Routes,
 } from '@paybox/db';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import type { Config } from './config';
 import { sha256 } from './crypto';
 import { Payments } from './payments';
 import { FakePaystackClient } from './provider/fake';
 import { Reconciliation } from './reconciliation';
 import { verifyPayment } from './settlement';
+import { USDC_ADDRESS, X402_NETWORK } from './x402/protocol';
 
 export async function seedDemo(db: Database, config: Config) {
   if (config.PAYSTACK_MODE !== 'fake') throw new Error('Demo fixtures require fake mode');
@@ -30,7 +33,10 @@ export async function seedDemo(db: Database, config: Config) {
   };
   if (existing) credentials = existing.value as typeof credentials;
   else {
-    const [merchant] = await db.insert(merchants).values({ name: 'Ada Studio · Lagos' }).returning();
+    const [merchant] = await db
+      .insert(merchants)
+      .values({ name: 'Ada Studio · Lagos', slug: 'demo-store' })
+      .returning();
     const password = randomBytes(18).toString('base64url'),
       viewerPassword = randomBytes(18).toString('base64url'),
       key = `pbx_test_sk_${randomBytes(24).toString('hex')}`;
@@ -51,6 +57,21 @@ export async function seedDemo(db: Database, config: Config) {
     };
     await db.insert(fakeSettings).values({ id: 'demo_credentials', value: credentials });
   }
+  await db.update(merchants).set({ slug: 'demo-store' }).where(eq(merchants.id, credentials.merchant_id));
+  await db
+    .insert(x402Routes)
+    .values({
+      merchantId: credentials.merchant_id,
+      method: 'GET',
+      path: '/v1/stock',
+      upstreamUrl: `${process.env.DEMO_RECEIVER_URL ?? 'http://127.0.0.1:4100'}/stock`,
+      price: 10000,
+      asset: USDC_ADDRESS,
+      network: X402_NETWORK,
+      payTo: privateKeyToAccount(generatePrivateKey()).address,
+      description: 'Stock availability',
+    })
+    .onConflictDoNothing();
   const client = new FakePaystackClient(
     db,
     config.API_PUBLIC_URL,

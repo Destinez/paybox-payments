@@ -21,11 +21,23 @@ export default defineConfig({
   ],
   webServer: [
     {
+      command: 'node examples/merchant-receiver/server.mjs',
+      url: 'http://localhost:4100/status',
+      reuseExistingServer: false,
+    },
+
+    {
       command: 'pnpm test:e2e:prepare && pnpm demo:seed && pnpm --filter api start',
       url: 'http://localhost:4000/healthz',
       reuseExistingServer: false,
       timeout: 120000,
-      env: { DATABASE_URL: database, TEST_DATABASE_URL: database, PAYSTACK_MODE: 'fake', DEMO_MODE: 'true' },
+      env: {
+        DATABASE_URL: database,
+        TEST_DATABASE_URL: database,
+        PAYSTACK_MODE: 'fake',
+        X402_MODE: 'fake',
+        DEMO_MODE: 'true',
+      },
     },
     {
       command: 'pnpm --filter @paybox/web start',
