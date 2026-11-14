@@ -63,3 +63,11 @@ pnpm test:e2e
 ```
 
 MIT · Copyright Obaro Destiny Udurie.
+
+## Operations and security
+
+Merchant API keys share a Postgres token bucket across processes (120 requests/minute). Logins allow ten attempts per fifteen minutes per connection address and normalized email. Forwarded addresses are not trusted. HTTP 429 includes `Retry-After`. Sessions use HttpOnly cookies, CSRF checks and admin/ops/viewer permissions. Logs omit request bodies, credentials and customer email.
+
+`/healthz` checks process liveness; `/readyz` requires every applied migration checksum to match this checkout. `/metrics` exposes Prometheus request latency, idempotency replays, webhook outcomes, durable worker attempts, DLQ depth and reconciliation findings. Worker metrics come from Postgres so the API process can expose them. HTTP metrics reset when the API restarts. `X-Request-Id` identifies each HTTP exchange; `X-Correlation-Id` follows the original payment into ledger events, jobs and `Paybox-Correlation-Id` on merchant notifications.
+
+`pnpm test:coverage` runs the unit/property and PostgreSQL integration suites together. Coverage gates require 90% of shared lines and 80% of API lines. Only process entry points are excluded. CI also checks the dashboard with Playwright and scans Git history for secrets.

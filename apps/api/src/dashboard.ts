@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from 'node:crypto';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { hash, verify } from '@node-rs/argon2';
 import {
   apiKeys,
@@ -25,10 +26,12 @@ import { requireRole } from './auth';
 import type { Config } from './config';
 import { sha256 } from './crypto';
 import { AppError } from './errors';
+import { consumeToken } from './limits';
 import { Payments } from './payments';
 import type { PaystackClient } from './provider/client';
 import { Refunds } from './refunds';
 import { requestVerification } from './settlement';
+import { annotate } from './telemetry';
 
 const csrf = (token: string, secret: string) =>
   createHmac('sha256', secret).update(`csrf:${token}`).digest('hex');
@@ -47,6 +50,18 @@ export function dashboardRoutes(app: App, db: Database, client: PaystackClient, 
     },
     async (c) => {
       const input = z.object({ email: z.string().email(), password: z.string() }).parse(await c.req.json());
+      let ip = 'unknown';
+      try {
+        ip = getConnInfo(c).remote.address ?? 'unknown';
+      } catch {}
+      const wait = await consumeToken(
+        db,
+        `login:${sha256(`${ip}:${input.email.toLowerCase()}`)}`,
+        10,
+        900000,
+      );
+      if (wait)
+        throw new AppError('rate_limited', 429, 'Login attempt limit exceeded', Math.ceil(wait / 1000));
       const [user] = await db
         .select()
         .from(dashboardUsers)
@@ -179,6 +194,12 @@ export function dashboardRoutes(app: App, db: Database, client: PaystackClient, 
         [key: string]: unknown;
       };
       const result = await paymentService.create(merchant_id, c.req.header('Idempotency-Key'), body);
+      if (result.body.correlation_id)
+        annotate({
+          correlation_id: String(result.body.correlation_id),
+          payment_id: String(result.body.id),
+          merchant_id,
+        });
       if (result.replayed) c.header('Idempotent-Replayed', 'true');
       if (result.status >= 400)
         return problem(

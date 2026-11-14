@@ -25,7 +25,14 @@ async function proxy(request: NextRequest, { params }: { params: Promise<{ path:
       signal: AbortSignal.timeout(15000),
     });
     const output = new Headers();
-    for (const key of ['content-type', 'set-cookie', 'x-request-id', 'retry-after', 'idempotent-replayed']) {
+    for (const key of [
+      'content-type',
+      'set-cookie',
+      'x-request-id',
+      'x-correlation-id',
+      'retry-after',
+      'idempotent-replayed',
+    ]) {
       const value = response.headers.get(key);
       if (value) output.set(key, value);
     }

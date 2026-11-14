@@ -5,6 +5,8 @@ import type { Env } from './app';
 import type { Config } from './config';
 import { safeEqual, sha256 } from './crypto';
 import { AppError } from './errors';
+import { consumeToken } from './limits';
+import { annotate } from './telemetry';
 export function requireRole(c: Context<Env>, allowed: ('admin' | 'ops' | 'viewer')[]) {
   const principal = c.get('principal');
   if (!principal.role || !allowed.includes(principal.role))
@@ -48,5 +50,8 @@ export async function authenticate(c: Context<Env>, db: Database, config: Config
     .where(and(eq(apiKeys.prefix, token.slice(0, 24)), isNull(apiKeys.revokedAt)));
   if (!key || !safeEqual(key.keyHash, sha256(token)))
     throw new AppError('unauthorized', 401, 'A valid merchant API key is required');
+  const wait = await consumeToken(db, `api:${key.id}`, 120, 60000);
+  if (wait) throw new AppError('rate_limited', 429, 'API key request limit exceeded', Math.ceil(wait / 1000));
+  annotate({ merchant_id: key.merchantId });
   c.set('principal', { merchantId: key.merchantId, actor: `api_key:${key.id}` });
 }

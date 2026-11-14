@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type Database, newId, sql } from '@paybox/db';
+import { type Database, newId } from '@paybox/db';
 import { listPaymentsInput, paymentInput, refundInput } from '@paybox/shared';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -16,9 +16,11 @@ import { Payments } from './payments';
 import type { PaystackClient } from './provider/client';
 import { FakePaystackClient } from './provider/fake';
 import { fakeRoutes } from './provider/routes';
+import { checkReadiness } from './readiness';
 import { reconciliationRoutes } from './reconciliation';
 import { Refunds } from './refunds';
 import { requestVerification } from './settlement';
+import { annotate, log, requestContext, telemetry } from './telemetry';
 import { ingestWebhook } from './webhooks';
 import { x402Routes as registerX402 } from './x402/routes';
 
@@ -57,12 +59,15 @@ export function register(
     response?: z.ZodTypeAny;
     status?: 200 | 201 | 202;
     public?: boolean;
+    contentType?: string;
   },
   handler: (c: Context<Env>) => Response | Promise<Response>,
 ) {
   const response = {
     description: 'Success',
-    content: { 'application/json': { schema: definition.response ?? jsonObject } },
+    content: {
+      [definition.contentType ?? 'application/json']: { schema: definition.response ?? jsonObject },
+    },
   };
   const error = {
     description: 'Problem details',
@@ -117,10 +122,25 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
     },
   });
   const service = new Payments(db, client, config);
+  const observability = telemetry(db);
   app.use('*', async (c, next) => {
-    c.set('requestId', `req_${newId()}`);
-    c.header('X-Request-Id', c.get('requestId'));
-    await next();
+    const requestId = `req_${newId()}`;
+    c.set('requestId', requestId);
+    c.header('X-Request-Id', requestId);
+    const started = performance.now();
+    await requestContext.run({ request_id: requestId, correlation_id: requestId }, async () => {
+      await next();
+      const route = c.res.status === 404 ? 'unmatched' : c.req.routePath;
+      const duration = (performance.now() - started) / 1000;
+      observability.requests.inc({ route, status: String(c.res.status) });
+      observability.duration.observe({ route }, duration);
+      if (c.res.headers.get('Idempotent-Replayed') === 'true') observability.replays.inc();
+      c.header('X-Correlation-Id', requestContext.getStore()?.correlation_id ?? requestId);
+      log.info(
+        { route, status: c.res.status, duration_ms: Math.round(duration * 1000) },
+        'Request completed',
+      );
+    });
   });
   app.use('*', secureHeaders());
   app.use(
@@ -131,6 +151,7 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
       allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-CSRF-Token', 'PAYMENT-SIGNATURE'],
       exposeHeaders: [
         'X-Request-Id',
+        'X-Correlation-Id',
         'Idempotent-Replayed',
         'Retry-After',
         'PAYMENT-REQUIRED',
@@ -160,14 +181,7 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
     if (error instanceof AppError) return problem(c, error);
     if (error instanceof z.ZodError || error instanceof SyntaxError)
       return problem(c, new AppError('validation_error', 400, 'Invalid request body'));
-    console.error(
-      JSON.stringify({
-        level: 'error',
-        request_id: c.get('requestId'),
-        msg: 'Request failed',
-        error_type: error.name,
-      }),
-    );
+    log.error({ error_type: error.name }, 'Request failed');
     return problem(c, new AppError('internal_error', 500, 'An unexpected error occurred'));
   });
   app.notFound((c) => problem(c, new AppError('not_found', 404, 'Route not found')));
@@ -178,7 +192,11 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
     app,
     { method: 'get', path: '/readyz', summary: 'Database readiness', public: true },
     async (c) => {
-      await db.execute(sql`SELECT 1`);
+      try {
+        await checkReadiness(db);
+      } catch {
+        throw new AppError('not_ready', 503, 'Database or migrations are not ready');
+      }
       return c.json({ status: 'ready' });
     },
   );
@@ -197,6 +215,8 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
         c.req.header('Idempotency-Key'),
         await c.req.json(),
       );
+      if (result.body.correlation_id)
+        annotate({ correlation_id: String(result.body.correlation_id), payment_id: String(result.body.id) });
       if (result.replayed) c.header('Idempotent-Replayed', 'true');
       if (result.status >= 400)
         return problem(
@@ -235,6 +255,21 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
       });
     },
   );
+  register(
+    app,
+    {
+      method: 'get',
+      path: '/metrics',
+      summary: 'Prometheus service metrics',
+      public: true,
+      contentType: 'text/plain',
+      response: z.string(),
+    },
+    async (c) => {
+      c.header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+      return c.body(await observability.metrics());
+    },
+  );
   const refundService = new Refunds(db, client);
   register(
     app,
@@ -257,6 +292,8 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
         await c.req.json(),
         c.get('principal').actor,
       );
+      if (result.body.correlation_id)
+        annotate({ correlation_id: String(result.body.correlation_id), payment_id: String(result.body.id) });
       if (result.replayed) c.header('Idempotent-Replayed', 'true');
       if (result.status >= 400)
         return problem(

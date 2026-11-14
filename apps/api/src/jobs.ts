@@ -14,6 +14,7 @@ import { backoff } from '@paybox/shared';
 import { z } from 'zod';
 import { AppError } from './errors';
 import { ProviderError } from './provider/client';
+import { log, requestContext } from './telemetry';
 export type Job = typeof outboxJobs.$inferSelect;
 export type JobHandler = (job: Job) => Promise<void>;
 export async function enqueue(
@@ -105,9 +106,30 @@ export class JobRunner {
     try {
       const handler = this.handlers[job.type];
       if (!handler) throw new AppError('unsupported_job', 422, 'No handler is registered for this job type');
-      await handler(job);
+      await requestContext.run(
+        {
+          job_id: job.id,
+          correlation_id: String(job.payload.correlation_id ?? job.id),
+          merchant_id: job.payload.merchant_id ? String(job.payload.merchant_id) : undefined,
+          payment_id: job.payload.payment_id ? String(job.payload.payment_id) : undefined,
+          event_type: job.payload.event ? String(job.payload.event) : undefined,
+        },
+        async () => {
+          log.info({ type: job.type, attempt: job.totalAttempts }, 'Job started');
+          await handler(job);
+          log.info({ type: job.type }, 'Job completed');
+        },
+      );
     } catch (error) {
       failure = error;
+      log.warn(
+        {
+          job_id: job.id,
+          correlation_id: String(job.payload.correlation_id ?? job.id),
+          error_type: error instanceof Error ? error.name : 'UnknownError',
+        },
+        'Job attempt failed',
+      );
     } finally {
       clearInterval(heartbeat);
     }

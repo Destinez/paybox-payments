@@ -13,6 +13,7 @@ import type { Config } from './config';
 import { sha256 } from './crypto';
 import { AppError } from './errors';
 import { parseProviderJson } from './provider/http';
+import { annotate } from './telemetry';
 
 export const webhookPayload = z
   .object({
@@ -64,6 +65,12 @@ export async function ingestWebhook(
       : reference && !isRefund
         ? await tx.select().from(payments).where(eq(payments.reference, reference))
         : [];
+    annotate({
+      event_type: supported.has(payload.event) ? payload.event : 'other',
+      correlation_id: payment?.correlationId,
+      payment_id: payment?.id,
+      merchant_id: payment?.merchantId,
+    });
     const [event] = await tx
       .insert(webhookEvents)
       .values({

@@ -6,6 +6,7 @@ import { FakePaystackClient } from './provider/fake';
 import { HttpPaystackClient } from './provider/http';
 import { Reconciliation } from './reconciliation';
 import { settlementHandlers } from './settlement';
+import { log } from './telemetry';
 
 const { db, pool } = connectDatabase(readEnvironment().DATABASE_URL);
 const config = await loadConfig(db);
@@ -35,6 +36,7 @@ const runner = new JobRunner(
   },
   config.DEMO_MODE === 'true',
 );
+log.info('Worker polling for durable jobs');
 try {
   while (!stopping) {
     const count = await runner.tick();

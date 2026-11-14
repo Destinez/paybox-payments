@@ -20,7 +20,8 @@
     "demo:seed": "tsx apps/api/src/seed-cli.ts",
     "test:e2e:prepare": "tsx apps/api/test/prepare-e2e.ts",
     "demo": "pnpm demo:x402",
-    "demo:x402": "tsx scripts/demo/05-agent-pays.mts"
+    "demo:x402": "tsx scripts/demo/05-agent-pays.mts",
+    "test:coverage": "vitest run --config vitest.coverage.config.ts --coverage"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

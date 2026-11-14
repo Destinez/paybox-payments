@@ -18,6 +18,7 @@ import type { Config } from './config';
 import { AppError } from './errors';
 import { Idempotency, type StoredResponse } from './idempotency';
 import { type PaystackClient, ProviderError } from './provider/client';
+import { requestContext } from './telemetry';
 
 export const maskEmail = (email: string) => `${email.slice(0, 1)}***@${email.split('@')[1]}`;
 export function paymentView(payment: typeof payments.$inferSelect, fullEmail = false) {
@@ -64,7 +65,7 @@ export class Payments {
               customerEmail: input.customer.email,
               metadata: input.metadata,
               callbackUrl: input.callback_url,
-              correlationId: `req_${newId()}`,
+              correlationId: requestContext.getStore()?.correlation_id ?? `req_${newId()}`,
             })
             .onConflictDoNothing({ target: payments.reference })
             .returning();

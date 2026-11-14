@@ -22,6 +22,7 @@ import { notifyMerchant } from './notifications';
 import type { PaystackClient, VerifiedTransaction } from './provider/client';
 import { parseProviderJson } from './provider/http';
 import { Refunds } from './refunds';
+import { log } from './telemetry';
 import { webhookPayload } from './webhooks';
 import { finalizeX402 } from './x402/accounting';
 
@@ -49,14 +50,9 @@ export async function applyVerification(
   if (!event) return payment;
   const next = transitionPayment(payment.status, event);
   if (next instanceof Error) {
-    console.info(
-      JSON.stringify({
-        msg: 'Illegal payment transition ignored',
-        payment_id: payment.id,
-        correlation_id: payment.correlationId,
-        from: payment.status,
-        event,
-      }),
+    log.info(
+      { payment_id: payment.id, correlation_id: payment.correlationId, from: payment.status, event },
+      'Illegal payment transition ignored',
     );
     return payment;
   }
