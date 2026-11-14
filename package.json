@@ -16,7 +16,9 @@
     "test:e2e": "playwright test",
     "db:migrate": "pnpm --filter @paybox/db migrate",
     "worker": "pnpm --filter api worker",
-    "format": "biome check --write ."
+    "format": "biome check --write .",
+    "demo:seed": "tsx apps/api/src/seed-cli.ts",
+    "test:e2e:prepare": "tsx apps/api/test/prepare-e2e.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

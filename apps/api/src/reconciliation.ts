@@ -51,14 +51,12 @@ export class Reconciliation {
         { run_id: run!.id, correlation_id: run!.id },
         `reconcile_window:${key}`,
       );
-      await tx
-        .insert(auditLog)
-        .values({
-          actor,
-          action: 'reconciliation.started',
-          targetType: 'reconciliation_run',
-          targetId: run!.id,
-        });
+      await tx.insert(auditLog).values({
+        actor,
+        action: 'reconciliation.started',
+        targetType: 'reconciliation_run',
+        targetId: run!.id,
+      });
       return { id: run!.id, status: 'pending' };
     });
   }
@@ -199,15 +197,13 @@ export class Reconciliation {
           .onConflictDoNothing()
           .returning();
         if (!claim) return;
-        await tx
-          .insert(reconciliationItems)
-          .values({
-            runId: id,
-            kind: 'unknown_remote',
-            local: { reference },
-            remote: { event_id: event.id, source: 'authenticated_webhook' },
-            resolution: 'open',
-          });
+        await tx.insert(reconciliationItems).values({
+          runId: id,
+          kind: 'unknown_remote',
+          local: { reference },
+          remote: { event_id: event.id, source: 'authenticated_webhook' },
+          resolution: 'open',
+        });
         await tx
           .update(reconciliationRuns)
           .set({
@@ -299,15 +295,13 @@ export function reconciliationRoutes(app: App, db: Database, client: PaystackCli
           .set({ ...input, resolvedBy: actor })
           .where(eq(reconciliationItems.id, id))
           .returning();
-        await tx
-          .insert(auditLog)
-          .values({
-            actor,
-            action: 'reconciliation.resolved',
-            targetType: 'reconciliation_item',
-            targetId: id,
-            detail: input,
-          });
+        await tx.insert(auditLog).values({
+          actor,
+          action: 'reconciliation.resolved',
+          targetType: 'reconciliation_item',
+          targetId: id,
+          detail: input,
+        });
         return updated!;
       });
       return c.json(result);

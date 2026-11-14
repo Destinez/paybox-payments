@@ -20,10 +20,7 @@ import { Idempotency, type StoredResponse } from './idempotency';
 import { type PaystackClient, ProviderError } from './provider/client';
 
 export const maskEmail = (email: string) => `${email.slice(0, 1)}***@${email.split('@')[1]}`;
-export function paymentView(
-  payment: typeof payments.$inferSelect,
-  fullEmail = false,
-): Record<string, unknown> {
+export function paymentView(payment: typeof payments.$inferSelect, fullEmail = false) {
   return {
     id: payment.id,
     merchant_id: payment.merchantId,

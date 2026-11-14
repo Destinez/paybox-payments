@@ -8,6 +8,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { authenticate } from './auth';
 import type { Config } from './config';
+import { dashboardRoutes } from './dashboard';
 import { AppError } from './errors';
 import { notificationRoutes } from './notifications';
 import { operationRoutes } from './operations';
@@ -138,8 +139,14 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
     }),
   );
   app.use('/v1/*', async (c, next) => {
-    if (c.req.path === '/v1/openapi.json') return next();
+    if (c.req.path === '/v1/openapi.json' || c.req.path === '/v1/session/login') return next();
     await authenticate(c, db, config);
+    if (
+      !c.req.path.startsWith('/v1/admin') &&
+      !c.req.path.startsWith('/v1/session') &&
+      !c.get('principal').merchantId
+    )
+      throw new AppError('forbidden', 403, 'Use a merchant API key for merchant routes');
     await next();
   });
   app.onError((error, c) => {
@@ -258,6 +265,7 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
         .refund,
     ),
   );
+  dashboardRoutes(app, db, client, config);
   reconciliationRoutes(app, db, client);
   notificationRoutes(app, db, config);
   operationRoutes(app, db);

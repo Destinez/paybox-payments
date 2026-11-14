@@ -30,7 +30,11 @@ export async function authenticate(c: Context<Env>, db: Database, config: Config
       !safeEqual(row.session.csrfHash, sha256(c.req.header('X-CSRF-Token') ?? ''))
     )
       throw new AppError('csrf_invalid', 403, 'A valid CSRF token is required');
-    if (row.user.role === 'viewer' && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method))
+    if (
+      row.user.role === 'viewer' &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
+      c.req.path !== '/v1/session/logout'
+    )
       throw new AppError('forbidden', 403, 'Viewers have read-only access');
     c.set('principal', { actor: row.user.email, userId: row.user.id, role: row.user.role });
     return;
