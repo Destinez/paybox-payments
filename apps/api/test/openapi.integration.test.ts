@@ -11,13 +11,15 @@ it('generated OpenAPI validates and matches every documented route', async () =>
   const response = await app.request('/v1/openapi.json');
   const spec = JSON.parse(await response.text());
   await SwaggerParser.validate(spec);
-  const methods = ['get', 'post', 'put', 'delete'];
+  const methods = ['get', 'post', 'put', 'patch', 'delete', 'head'];
   for (const [path, definition] of Object.entries(spec.paths as Record<string, Record<string, unknown>>)) {
     for (const method of methods.filter((m) => m in definition))
       expect(
         app.routes.some(
           (route) =>
-            route.method === method.toUpperCase() && route.path === path.replace(/\{(\w+)\}/g, ':$1'),
+            (route.method === method.toUpperCase() && route.path === path.replace(/\{(\w+)\}/g, ':$1')) ||
+            (route.method === 'ALL' &&
+              route.path === path.replace('{path}', '*').replace(/\{(\w+)\}/g, ':$1')),
         ),
       ).toBe(true);
   }

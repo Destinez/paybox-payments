@@ -15,6 +15,7 @@ const environment = z.object({
   WEB_URL: z.string().url().default('http://localhost:3000'),
   API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
   DATABASE_URL: z.string().default('postgres://paybox:paybox@localhost:5433/paybox'),
+  DEMO_RECEIVER_URL: z.string().url().default('http://127.0.0.1:4100'),
   DEMO_MODE: z.enum(['true', 'false']).default('false'),
   RECON_CRON: z.string().default('0 2 * * *'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),

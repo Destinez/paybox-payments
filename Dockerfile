@@ -12,9 +12,10 @@ COPY packages/shared/package.json packages/shared/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
+RUN mkdir -p /app/.local && chown node:node /app/.local
 
 FROM build AS runtime
 ENV NODE_ENV=production
 USER node
 EXPOSE 3000 4000
-CMD ["pnpm", "--filter", "api", "start"]
+CMD ["node", "apps/api/dist/server.js"]

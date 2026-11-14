@@ -17,7 +17,7 @@ services:
       retries: 20
   migrate:
     build: .
-    command: ["pnpm", "db:migrate"]
+    command: ["node", "packages/db/dist/migrate.js"]
     environment:
       DATABASE_URL: postgres://paybox:paybox@postgres:5432/paybox
     depends_on:
@@ -35,8 +35,8 @@ services:
       PAYSTACK_ACCEPT_LEGACY_SIGNATURE: ${PAYSTACK_ACCEPT_LEGACY_SIGNATURE:-false}
       SESSION_SECRET: ${SESSION_SECRET:-}
       DATA_KEY: ${DATA_KEY:-}
-      WEB_URL: http://localhost:3000
-      API_PUBLIC_URL: http://localhost:4000
+      WEB_URL: ${WEB_URL:-http://localhost:3000}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:4000}
       DEMO_MODE: ${DEMO_MODE:-true}
     ports: ["127.0.0.1:4000:4000"]
     depends_on:
@@ -55,7 +55,7 @@ services:
     ports: ["127.0.0.1:4100:4100"]
   web:
     build: .
-    command: ["pnpm", "--filter", "@paybox/web", "start"]
+    command: ["node", "apps/web/node_modules/next/dist/bin/next", "start", "apps/web"]
     environment:
       API_URL: http://api:4000
     ports: ["127.0.0.1:3000:3000"]

@@ -64,7 +64,7 @@ export async function seedDemo(db: Database, config: Config) {
       merchantId: credentials.merchant_id,
       method: 'GET',
       path: '/v1/stock',
-      upstreamUrl: `${process.env.DEMO_RECEIVER_URL ?? 'http://127.0.0.1:4100'}/stock`,
+      upstreamUrl: `${config.DEMO_RECEIVER_URL}/stock`,
       price: 10000,
       asset: USDC_ADDRESS,
       network: X402_NETWORK,

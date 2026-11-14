@@ -354,9 +354,13 @@ export function createApp(db: Database, client: PaystackClient, config: Config) 
   if (client instanceof FakePaystackClient)
     app.route(
       '/fake',
-      fakeRoutes(client, async (body, signature) => {
-        await ingestWebhook(db, config, Buffer.from(body), { current: signature });
-      }),
+      fakeRoutes(
+        client,
+        async (body, signature) => {
+          await ingestWebhook(db, config, Buffer.from(body), { current: signature });
+        },
+        config.DEMO_RECEIVER_URL,
+      ),
     );
   return { app, service };
 }

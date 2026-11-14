@@ -14,6 +14,7 @@ export default defineConfig({
         'apps/api/src/server.ts',
         'apps/api/src/worker.ts',
         'apps/api/src/seed-cli.ts',
+        'apps/api/src/bootstrap.ts',
       ],
       reporter: ['text', 'json-summary', 'html'],
       thresholds: { 'packages/shared/src/**': { lines: 90 }, 'apps/api/src/**': { lines: 80 } },

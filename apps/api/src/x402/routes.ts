@@ -40,6 +40,40 @@ const present = (row: typeof routes.$inferSelect, slug: string) => ({
 export function x402Routes(app: App, db: Database, config: Config) {
   const gateway = new X402Gateway(db, config);
   app.all('/x402/m/:merchantSlug/*', (c) => gateway.handle(c));
+  for (const method of ['get', 'post', 'put', 'patch', 'delete', 'head'] as const)
+    app.openAPIRegistry.registerPath({
+      method,
+      path: '/x402/m/{merchantSlug}/{path}',
+      summary: 'Request a merchant paid endpoint',
+      description:
+        'The path parameter is the remaining endpoint path, for example v1/stock. Base Sepolia test USDC only. An authorization is consumed once, even after an upstream or settlement failure.',
+      security: [],
+      request: {
+        params: z.object({ merchantSlug: z.string(), path: z.string() }),
+        headers: z.object({ 'PAYMENT-SIGNATURE': z.string().optional() }),
+      },
+      responses: {
+        200: {
+          description: 'Successful upstream response after confirmed settlement',
+          headers: {
+            'PAYMENT-RESPONSE': { schema: { type: 'string' }, description: 'Base64 v2 settlement receipt' },
+          },
+        },
+        402: {
+          description: 'Payment challenge or invalid/reused authorization',
+          headers: {
+            'PAYMENT-REQUIRED': {
+              schema: { type: 'string' },
+              description: 'Base64 v2 PaymentRequired challenge',
+            },
+          },
+          content: { 'application/problem+json': { schema: z.record(z.unknown()) } },
+        },
+        404: { description: 'No active priced route' },
+        502: { description: 'Upstream unavailable or settlement could not be confirmed' },
+      },
+    });
+
   for (const admin of [false, true]) {
     const base = admin ? '/v1/admin/x402' : '/v1/x402';
     function access(c: Context<Env>, write = false) {

@@ -58,7 +58,15 @@ test('viewer sees masked details and cannot initiate money movement', async ({ p
 test('x402 demo pays once, route editing works, and the tab is accessible on desktop and mobile', async ({
   page,
 }) => {
-  await promisify(execFile)('pnpm', ['demo'], {
+  const demoCredentials = JSON.parse(await readFile('.local/demo.json', 'utf8'));
+  const auth = { Authorization: `Bearer ${demoCredentials.api_key}` };
+  const before = await (await fetch('http://localhost:4000/v1/x402/payments', { headers: auth })).json();
+  const routes = await (await fetch('http://localhost:4000/v1/x402/routes', { headers: auth })).json();
+  const amount =
+    BigInt(before.books.USDC) +
+    BigInt(routes.data.find((r: { path: string }) => r.path === '/v1/stock').price);
+  const expectedBalance = `${amount / 1000000n}.${String(amount % 1000000n).padStart(6, '0')} USDC`;
+  await promisify(execFile)('pnpm', ['demo:x402'], {
     env: { ...process.env, COREPACK_HOME: '/tmp/paybox-corepack' },
   });
   await page.goto('/login');
@@ -67,8 +75,8 @@ test('x402 demo pays once, route editing works, and the tab is accessible on des
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByRole('link', { name: 'Paid endpoints', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Paid endpoints' })).toBeVisible();
-  await expect(page.getByText('settled', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '0.010000 USDC' })).toBeVisible();
+  await expect(page.getByText('settled', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: expectedBalance })).toBeVisible();
   await page.getByRole('button', { name: 'Edit Stock availability' }).click();
   await page.getByLabel('Price (USDC)').fill('0.02');
   await page.getByRole('button', { name: 'Save priced route', exact: true }).click();

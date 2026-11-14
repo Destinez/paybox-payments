@@ -46,11 +46,14 @@ export async function prepareX402Demo() {
   if ((process.env.X402_MODE ?? 'fake') !== 'fake') return;
   const credentials = JSON.parse(await readFile('.local/demo.json', 'utf8'));
   const base = process.env.API_PUBLIC_URL ?? 'http://localhost:4000';
-  const receiver = process.env.DEMO_RECEIVER_URL ?? 'http://127.0.0.1:4100';
+  const receiver = process.env.DEMO_RECEIVER_PUBLIC_URL ?? 'http://127.0.0.1:4100';
+  const info = z
+    .object({ receiver_url: z.string().url() })
+    .parse(await (await fetch(`${base}/fake/info`)).json());
   const endpoint = await fetch(`${base}/v1/webhook-endpoint`, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${credentials.api_key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: `${receiver}/webhook` }),
+    body: JSON.stringify({ url: `${info.receiver_url}/webhook` }),
   });
   if (!endpoint.ok) throw new Error('Could not configure the demo merchant endpoint');
   const { secret } = z.object({ secret: z.string() }).parse(await endpoint.json());
@@ -60,4 +63,30 @@ export async function prepareX402Demo() {
     body: JSON.stringify({ secret, fail: false }),
   });
   if (!configured.ok) throw new Error('Start the local merchant receiver before running the demo');
+  const headers = { Authorization: `Bearer ${credentials.api_key}`, 'Content-Type': 'application/json' };
+  const routes = z
+    .object({
+      data: z.array(
+        z.object({
+          id: z.string(),
+          path: z.string(),
+          method: z.string(),
+          price: z.string(),
+          asset: z.string(),
+          network: z.string(),
+          pay_to: z.string(),
+          description: z.string(),
+        }),
+      ),
+    })
+    .parse(await (await fetch(`${base}/v1/x402/routes`, { headers })).json());
+  const route = routes.data.find((r) => r.path === '/v1/stock');
+  if (!route) throw new Error('Run pnpm demo:seed to create the priced route');
+  const { id, ...input } = route;
+  const updated = await fetch(`${base}/v1/x402/routes/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ ...input, active: true, upstream_url: `${info.receiver_url}/stock` }),
+  });
+  if (!updated.ok) throw new Error('Could not configure the demo upstream');
 }
