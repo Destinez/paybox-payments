@@ -1,6 +1,6 @@
 # Paybox Payments
 
-[![CI](https://github.com/obarodestinez/paybox-payments/actions/workflows/ci.yml/badge.svg)](https://github.com/obarodestinez/paybox-payments/actions/workflows/ci.yml)
+[![CI](https://github.com/Destinez/paybox-payments/actions/workflows/ci.yml/badge.svg)](https://github.com/Destinez/paybox-payments/actions/workflows/ci.yml)
 
 A payment operations service for Nigerian commerce platforms. Paybox sits between a merchant and Paystack: it creates checkout links, verifies money movement, posts immutable double-entry journals, delivers signed notifications, and reconciles missing or inconsistent processor records. Merchants can also sell API access per request using x402 and test USDC.
 
