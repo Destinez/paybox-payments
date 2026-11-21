@@ -86,7 +86,7 @@ export function Dashboard({ page = 'overview', paymentId }: { page?: Page; payme
         <span className="nav-label">WORKSPACE</span>
         <nav>
           {[
-            { id: 'overview', href: '/', label: 'Overview', icon: LayoutDashboard },
+            { id: 'overview', href: '/app', label: 'Overview', icon: LayoutDashboard },
             { id: 'x402', href: '/x402', label: 'Paid endpoints', icon: BookOpen },
             { id: 'payments', href: '/payments', label: 'Payments', icon: ArrowDownLeft },
             { id: 'dead-letters', href: '/dead-letters', label: 'Dead-letter queue', icon: Wallet },

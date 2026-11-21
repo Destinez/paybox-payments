@@ -13,6 +13,7 @@ test('dashboard login, payment filters, detail, responsive layout and accessibil
   await page.getByLabel('Email address').fill(credentials.email);
   await page.getByLabel('Password', { exact: true }).fill(credentials.password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL('/app');
   await expect(page.getByRole('heading', { name: 'Every payment. Accounted for.' })).toBeVisible();
   await expect(page.locator('tbody tr').first()).toBeVisible();
   let results = await new AxeBuilder({ page }).analyze();
@@ -47,6 +48,7 @@ test('viewer sees masked details and cannot initiate money movement', async ({ p
   await page.getByLabel('Email address').fill(credentials.viewer_email);
   await page.getByLabel('Password', { exact: true }).fill(credentials.viewer_password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL('/app');
   await expect(page.getByRole('heading', { name: 'Every payment. Accounted for.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create payment' })).toHaveCount(0);
   await page.locator('tbody .reference-link').first().click();
