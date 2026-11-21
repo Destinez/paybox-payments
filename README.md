@@ -20,7 +20,7 @@ pnpm demo:seed
 pnpm demo
 ```
 
-Open **http://localhost:3000**. Generated admin/viewer logins and the merchant API key are in `.local/demo.json`, outside version control. Postgres listens on port 5433, the API on 4000, and the example merchant receiver on 4100. Compose applies migrations before starting the API and worker. The demo detects whether its upstream receiver runs on the host or the Compose network.
+Open **http://localhost:3000** for the public site and interactive test-payment example. The developer guide at **/developers** works without the API. Sign in to the operations workspace at **/app**. Generated admin/viewer logins and the merchant API key are in `.local/demo.json`, outside version control. Postgres listens on port 5433, the API on 4000, and the example merchant receiver on 4100. Compose applies migrations before starting the API and worker. The demo detects whether its upstream receiver runs on the host or the Compose network.
 
 `pnpm demo` runs the complete walkthrough through HTTP, including the worker and receiver. It checks the actual outcomes and stops on failure:
 

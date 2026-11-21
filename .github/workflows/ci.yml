@@ -16,7 +16,7 @@ jobs:
           POSTGRES_DB: paybox_test
         ports: ["55432:5432"]
         options: >-
-          --health-cmd 'pg_isready -U paybox -d paybox_test'
+          --health-cmd "pg_isready -U paybox -d paybox_test"
           --health-interval 3s --health-timeout 3s --health-retries 20
     env:
       DATABASE_URL: postgres://paybox:paybox@localhost:55432/paybox_test

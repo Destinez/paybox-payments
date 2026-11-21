@@ -55,7 +55,7 @@ export function Login() {
                   body: JSON.stringify({ email: data.get('email'), password: data.get('password') }),
                 });
                 sessionStorage.setItem('paybox_csrf', result.csrf_token);
-                window.location.assign('/');
+                window.location.assign('/app');
               } catch (error) {
                 setError((error as Error).message);
               } finally {
